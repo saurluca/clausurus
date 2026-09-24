@@ -80,6 +80,21 @@ describe("llm helpers", () => {
     expect(d.map((x) => x.value).sort()).toEqual(["Bern", "Marcus Weber"]);
   });
 
+  test("locateEntities keeps benchmark labels by mapping them", () => {
+    const text = "user wynqvrh053 password q4R\\ license LOUMA.657200.9.504";
+    const d = locateEntities(text, [
+      { type: "USERNAME", value: "wynqvrh053" },
+      { type: "PASS", value: "q4R\\" },
+      { type: "DRIVERLICENSE", value: "LOUMA.657200.9.504" },
+      { type: "not_a_label", value: "user" },
+    ]);
+    expect(d.map((x) => [x.type, x.value])).toEqual([
+      ["person_name", "wynqvrh053"],
+      ["other_id", "q4R\\"],
+      ["other_id", "LOUMA.657200.9.504"],
+    ]);
+  });
+
   test("chunkText splits long input", () => {
     const long = "para\n\n".repeat(2000);
     const chunks = chunkText(long, 6000);

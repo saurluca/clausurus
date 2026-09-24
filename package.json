@@ -11,7 +11,8 @@
     "build": "tsc",
     "start": "node dist/cli.js",
     "dev": "bun src/cli.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "bench": "bun scripts/bench-pii.ts"
   },
   "engines": {
     "node": ">=20"

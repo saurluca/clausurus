@@ -9,12 +9,58 @@ const LLM_TYPES = new Set<EntityType>([
   "medical_record",
   "insurance_id",
   "other_id",
+  "email",
+  "phone",
+  "ipv4",
+  "ipv6",
+]);
+
+/** Benchmark labels from ai4privacy/pii-masking-300k, mapped onto maskable types. */
+const BENCH_LABELS = new Map<string, EntityType>([
+  ["GIVENNAME1", "person_name"],
+  ["GIVENNAME2", "person_name"],
+  ["LASTNAME1", "person_name"],
+  ["LASTNAME2", "person_name"],
+  ["LASTNAME3", "person_name"],
+  ["USERNAME", "person_name"],
+  ["TITLE", "person_name"],
+  ["BOD", "date_of_birth"],
+  ["DATE", "date_of_birth"],
+  ["TIME", "other_id"],
+  ["PASS", "other_id"],
+  ["IDCARD", "other_id"],
+  ["PASSPORT", "other_id"],
+  ["DRIVERLICENSE", "other_id"],
+  ["SOCIALNUMBER", "other_id"],
+  ["CARDISSUER", "organization"],
+  ["SEX", "other_id"],
+  ["CITY", "location"],
+  ["STATE", "location"],
+  ["COUNTRY", "location"],
+  ["GEOCOORD", "location"],
+  ["STREET", "address"],
+  ["BUILDING", "address"],
+  ["POSTCODE", "address"],
+  ["SECADDRESS", "address"],
+  ["EMAIL", "email"],
+  ["TEL", "phone"],
 ]);
 
 const SYSTEM_PROMPT = `You are a PII detector for Swiss and international text (DE, FR, IT, EN, Swiss German).
-Find personal entities in the user text. Reply with JSON only, no markdown:
+Find every personal or sensitive span, including the categories listed below. Reply with JSON only, no markdown:
 {"entities":[{"type":"person_name","value":"exact substring from the text"}]}
-Allowed types: person_name, organization, location, address, date_of_birth, medical_record, insurance_id, other_id.
+Allowed types: person_name, organization, location, address, date_of_birth, medical_record, insurance_id, other_id, email, phone, ipv4, ipv6.
+Map categories onto those types:
+- person_name: given names, surnames, usernames, titles
+- date_of_birth: dates of birth and other dates
+- other_id: passwords, id cards, passports, driver licenses, social-security numbers, sex, times
+- organization: card issuers and other organizations
+- location: city, state, country, coordinates
+- address: street, building number, postcode, secondary address
+- email: email addresses
+- phone: telephone numbers
+- ipv4 or ipv6: IP addresses
+- medical_record and insurance_id when those appear
 Copy each value exactly as it appears in the text. Do not invent values. If none, return {"entities":[]}.`;
 
 export type LlmDetectorConfig = {
@@ -62,6 +108,14 @@ export function stripToJsonObject(raw: string): string {
   return raw.slice(start, end + 1);
 }
 
+function canonicalType(raw: string, value: string): EntityType | undefined {
+  const key = raw.trim();
+  if (LLM_TYPES.has(key as EntityType)) return key as EntityType;
+  const upper = key.toUpperCase();
+  if (upper === "IP") return value.includes(":") ? "ipv6" : "ipv4";
+  return BENCH_LABELS.get(upper);
+}
+
 export function locateEntities(
   text: string,
   entities: Array<{ type: string; value: string }>,
@@ -70,8 +124,8 @@ export function locateEntities(
   const used: Array<{ start: number; end: number }> = [];
   for (const ent of entities) {
     if (!ent?.value || typeof ent.value !== "string") continue;
-    const type = ent.type as EntityType;
-    if (!LLM_TYPES.has(type)) continue;
+    const type = canonicalType(ent.type, ent.value);
+    if (!type) continue;
     let from = 0;
     while (from <= text.length) {
       const idx = text.indexOf(ent.value, from);
