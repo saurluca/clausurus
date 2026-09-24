@@ -4,9 +4,8 @@
  *   bun scripts/bench-pii.ts --limit 10 --seed 1
  *   bun scripts/bench-pii.ts --limit 50 --seed 7 --split train --detection regex
  */
-import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, stat } from "node:fs/promises";
-import { createInterface } from "node:readline";
+import { createWriteStream } from "node:fs";
+import { mkdir, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { sampleIndices } from "../bench/sample.js";
 import { aggregate, scoreExample, type Span } from "../bench/score.js";
@@ -90,11 +89,13 @@ async function ensureShard(remotePath: string): Promise<string> {
   return local;
 }
 
-async function countLines(file: string): Promise<number> {
-  let n = 0;
-  const rl = createInterface({ input: createReadStream(file), crlfDelay: Infinity });
-  for await (const line of rl) if (line) n++;
-  return n;
+/** Split on LF only. Readline also breaks on U+2028, which this dataset embeds inside JSON strings. */
+async function linesOf(file: string): Promise<string[]> {
+  const text = await readFile(file, "utf8");
+  return text
+    .split("\n")
+    .map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line))
+    .filter((line) => line.length > 0);
 }
 
 function asGold(raw: unknown): GoldSpan[] {
@@ -134,9 +135,7 @@ async function loadRows(files: string[], indexes: number[]): Promise<Row[]> {
   const rows: Row[] = new Array(indexes.length);
   let global = 0;
   for (const file of files) {
-    const rl = createInterface({ input: createReadStream(file), crlfDelay: Infinity });
-    for await (const line of rl) {
-      if (!line) continue;
+    for (const line of await linesOf(file)) {
       const slot = want.get(global);
       if (slot !== undefined) rows[slot] = parseRow(line, global);
       global++;
@@ -187,7 +186,7 @@ async function main(): Promise<void> {
   const files: string[] = [];
   for (const path of paths) files.push(await ensureShard(path));
   let count = 0;
-  for (const file of files) count += await countLines(file);
+  for (const file of files) count += (await linesOf(file)).length;
   const indexes = sampleIndices(count, limit, seed);
   const rows = await loadRows(files, indexes);
 
