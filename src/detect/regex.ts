@@ -31,6 +31,31 @@ const DATE_RE =
 const DOB_CONTEXT =
   /(?:^|[^A-Za-zÀ-ÿ])(?:born|geboren|n[eé](?:e)?|dob|date of birth|geburtsdatum|naissance)(?![A-Za-zÀ-ÿ])/i;
 
+/** 6–20 chars, at least one digit, separators . / - allowed. */
+const ID_TOKEN_RE = /\b(?=[A-Za-z0-9./-]*\d)[A-Za-z0-9](?:[A-Za-z0-9./-]{4,18})[A-Za-z0-9]\b/g;
+
+const ID_GATES: Array<{ type: EntityType; ctx: RegExp }> = [
+  {
+    type: "passport",
+    ctx: /\b(?:passport|reisepass|passeport|passaporto|pasaporte|paspoort)\b/i,
+  },
+  {
+    type: "national_id",
+    ctx: /\b(?:ssn|social security|sozialversicherungsnummer|num[eé]ro de s[eé]curit[eé] sociale|codice fiscale|ahv(?:-?nummer)?|avs|versicherungsnummer)\b/i,
+  },
+  {
+    type: "driver_license",
+    ctx: /\b(?:driver(?:'s)? license|f[uü]hrerschein|permis de conduire|patente|permiso de conducir|rijbewijs)\b/i,
+  },
+  {
+    type: "id_card",
+    ctx: /\b(?:id card|identity card|personalausweis|carte d'identit[eé]|carta d'identit[aà]|documento de identidad|identiteitskaart)\b/i,
+  },
+];
+
+const TRACKING_RE =
+  /\b(?:1Z[A-Za-z0-9]{16}|9[2-5]\d{18,20}|JJD\d{10,20}|JD\d{12,22})\b/gi;
+
 function pushMatch(
   out: Detection[],
   type: EntityType,
@@ -40,6 +65,26 @@ function pushMatch(
   const value = match[0];
   const start = match.index;
   out.push({ type, value, start, end: start + value.length, source: "regex" });
+}
+
+function overlaps(out: Detection[], start: number, end: number): boolean {
+  return out.some((d) => start < d.end && end > d.start);
+}
+
+function gatedIdType(window: string): EntityType | undefined {
+  let bestAt = -1;
+  let best: EntityType | undefined;
+  for (const gate of ID_GATES) {
+    const re = new RegExp(gate.ctx.source, "gi");
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(window))) {
+      if (m.index >= bestAt) {
+        bestAt = m.index;
+        best = gate.type;
+      }
+    }
+  }
+  return best;
 }
 
 function isPersonalUrl(url: string): boolean {
@@ -138,6 +183,29 @@ export function detectRegex(text: string): Detection[] {
       const window = text.slice(windowStart, m.index + m[0].length + 10);
       if (!DOB_CONTEXT.test(window)) continue;
       pushMatch(out, "date_of_birth", text, m);
+    }
+  }
+
+  TRACKING_RE.lastIndex = 0;
+  {
+    let m: RegExpExecArray | null;
+    while ((m = TRACKING_RE.exec(text))) {
+      if (overlaps(out, m.index, m.index + m[0].length)) continue;
+      pushMatch(out, "tracking_number", text, m);
+    }
+  }
+
+  ID_TOKEN_RE.lastIndex = 0;
+  {
+    let m: RegExpExecArray | null;
+    while ((m = ID_TOKEN_RE.exec(text))) {
+      const start = m.index;
+      const end = start + m[0].length;
+      if (overlaps(out, start, end)) continue;
+      const window = text.slice(Math.max(0, start - 40), start);
+      const type = gatedIdType(window);
+      if (!type) continue;
+      pushMatch(out, type, text, m);
     }
   }
 

@@ -66,6 +66,21 @@ describe("detectRegex", () => {
     expect(noCtx.some((x) => x.type === "date_of_birth")).toBe(false);
   });
 
+  test("document ids need a keyword", () => {
+    const token = "Z98M3876P";
+    expect(detectRegex(`Reisepass: ${token}`).some((x) => x.type === "passport" && x.value === token)).toBe(true);
+    expect(detectRegex(`SSN ${token}`).some((x) => x.type === "national_id")).toBe(true);
+    expect(detectRegex(`Führerschein ${token}`).some((x) => x.type === "driver_license")).toBe(true);
+    expect(detectRegex(`Personalausweis ${token}`).some((x) => x.type === "id_card")).toBe(true);
+    expect(detectRegex(`code ${token}`).some((x) => x.type === "passport" || x.type === "national_id" || x.type === "driver_license" || x.type === "id_card")).toBe(false);
+  });
+
+  test("tracking numbers use carrier shapes", () => {
+    const ups = detectRegex("ship 1Z999AA10123456784 today");
+    expect(ups.some((x) => x.type === "tracking_number" && x.value === "1Z999AA10123456784")).toBe(true);
+    expect(detectRegex("order 1234567890").some((x) => x.type === "tracking_number")).toBe(false);
+  });
+
   test("returns offsets", () => {
     const text = "mail a@b.co end";
     const d = detectRegex(text);

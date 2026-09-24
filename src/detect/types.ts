@@ -15,7 +15,12 @@ export type EntityType =
   | "address"
   | "medical_record"
   | "insurance_id"
-  | "other_id";
+  | "other_id"
+  | "passport"
+  | "national_id"
+  | "driver_license"
+  | "id_card"
+  | "tracking_number";
 
 export type DetectionSource = "regex" | "llm";
 

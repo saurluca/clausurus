@@ -369,6 +369,11 @@ export function generateFake(opts: GenerateOpts): string {
     case "medical_record":
     case "insurance_id":
     case "other_id":
+    case "passport":
+    case "national_id":
+    case "driver_license":
+    case "id_card":
+    case "tracking_number":
       return fakeGenericId(real, rng);
     default:
       return formatPreserve(real, rng);

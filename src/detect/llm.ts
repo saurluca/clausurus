@@ -13,6 +13,11 @@ const LLM_TYPES = new Set<EntityType>([
   "phone",
   "ipv4",
   "ipv6",
+  "passport",
+  "national_id",
+  "driver_license",
+  "id_card",
+  "tracking_number",
 ]);
 
 /** Benchmark labels from ai4privacy/pii-masking-300k, mapped onto maskable types. */
@@ -28,10 +33,10 @@ const BENCH_LABELS = new Map<string, EntityType>([
   ["DATE", "date_of_birth"],
   ["TIME", "other_id"],
   ["PASS", "other_id"],
-  ["IDCARD", "other_id"],
-  ["PASSPORT", "other_id"],
-  ["DRIVERLICENSE", "other_id"],
-  ["SOCIALNUMBER", "other_id"],
+  ["IDCARD", "id_card"],
+  ["PASSPORT", "passport"],
+  ["DRIVERLICENSE", "driver_license"],
+  ["SOCIALNUMBER", "national_id"],
   ["CARDISSUER", "organization"],
   ["SEX", "other_id"],
   ["CITY", "location"],
@@ -49,11 +54,12 @@ const BENCH_LABELS = new Map<string, EntityType>([
 const SYSTEM_PROMPT = `You are a PII detector for Swiss and international text (DE, FR, IT, EN, Swiss German).
 Find every personal or sensitive span, including the categories listed below. Reply with JSON only, no markdown:
 {"entities":[{"type":"person_name","value":"exact substring from the text"}]}
-Allowed types: person_name, organization, location, address, date_of_birth, medical_record, insurance_id, other_id, email, phone, ipv4, ipv6.
+Allowed types: person_name, organization, location, address, date_of_birth, medical_record, insurance_id, other_id, email, phone, ipv4, ipv6, passport, national_id, driver_license, id_card, tracking_number.
 Map categories onto those types:
 - person_name: given names, surnames, usernames, titles
 - date_of_birth: dates of birth and other dates
-- other_id: passwords, id cards, passports, driver licenses, social-security numbers, sex, times
+- other_id: passwords, sex, times
+- passport, national_id, driver_license, id_card, tracking_number when those appear
 - organization: card issuers and other organizations
 - location: city, state, country, coordinates
 - address: street, building number, postcode, secondary address

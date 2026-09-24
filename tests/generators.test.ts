@@ -86,6 +86,14 @@ describe("generateFake", () => {
     expect(a).toBe(b);
   });
 
+  test("passport fake keeps length and separators", () => {
+    const real = "Z98M-3876P";
+    const fake = generateFake({ sessionId: "pass", real, type: "passport" });
+    expect(fake).toHaveLength(real.length);
+    expect(fake[4]).toBe("-");
+    expect(fake).not.toBe(real);
+  });
+
   test("email is at fake domain", () => {
     const fake = generateFake({ sessionId: "e", real: "bob@corp.ch", type: "email" });
     expect(fake).toMatch(/@.+\.(net|test|demo|fake|invalid)$/);

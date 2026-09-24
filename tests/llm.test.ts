@@ -91,7 +91,7 @@ describe("llm helpers", () => {
     expect(d.map((x) => [x.type, x.value])).toEqual([
       ["person_name", "wynqvrh053"],
       ["other_id", "q4R\\"],
-      ["other_id", "LOUMA.657200.9.504"],
+      ["driver_license", "LOUMA.657200.9.504"],
     ]);
   });
 
