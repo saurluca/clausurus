@@ -1,6 +1,13 @@
 import type { EntityType } from "../detect/types.js";
 import { generateFake } from "./generators.js";
 
+export type SessionMapJson = {
+  sessionId: string;
+  realToFake: Array<[string, string]>;
+  fakeToReal: Array<[string, string]>;
+  typesSeen: Array<[EntityType, number]>;
+};
+
 function normalizeValue(type: EntityType, value: string): string {
   if (type === "email") return value.toLowerCase();
   return value;
@@ -98,5 +105,22 @@ export class SessionMap {
       return fake;
     }
     throw new Error(`Unable to generate unique fake for type=${type}`);
+  }
+
+  toJSON(): SessionMapJson {
+    return {
+      sessionId: this.sessionId,
+      realToFake: [...this.realToFake.entries()],
+      fakeToReal: [...this.fakeToReal.entries()],
+      typesSeen: [...this.typesSeen.entries()],
+    };
+  }
+
+  static fromJSON(data: SessionMapJson): SessionMap {
+    const map = new SessionMap(data.sessionId);
+    map.realToFake = new Map(data.realToFake);
+    map.fakeToReal = new Map(data.fakeToReal);
+    map.typesSeen = new Map(data.typesSeen);
+    return map;
   }
 }

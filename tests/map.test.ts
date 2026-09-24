@@ -57,4 +57,16 @@ describe("SessionMap", () => {
     const f2 = map.mask("email", "c@d.com");
     expect(f1).not.toBe(f2);
   });
+
+  test("round-trips through JSON without the transient request set", () => {
+    const map = new SessionMap("persist");
+    map.noteRequestValues(["keep-me@example.com"]);
+    const fake = map.mask("person_name", "Ada Lovelace");
+    const restored = SessionMap.fromJSON(map.toJSON());
+    expect(restored.sessionId).toBe("persist");
+    expect(restored.getReal(fake)).toBe("Ada Lovelace");
+    expect(restored.mask("person_name", "Ada Lovelace")).toBe(fake);
+    expect(restored.maskedTypes()).toEqual(["person_name"]);
+    expect(restored.maskedCount()).toBe(1);
+  });
 });
