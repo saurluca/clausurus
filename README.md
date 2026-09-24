@@ -63,6 +63,28 @@ Auth is transparent: `Authorization`, `x-api-key`, `api-key`, and `anthropic-ver
 - Images, audio, and raw/non-JSON bodies are not masked (v1).
 - No persistent map backend; no multi-tenant hosting.
 
+## Gemini extension
+
+Chrome extension that masks personal data in the Gemini composer, then shows the real values again in the chat. Gemini only receives the fakes. The real-to-fake map stays in `chrome.storage.session` and is dropped when the browser quits.
+
+```bash
+bun scripts/spike-ner.ts   # download and score the bundled NER model
+bun run build:ext          # write extension/dist
+```
+
+Load `extension/` as an unpacked extension at `chrome://extensions`. The popup turns protection on or off and chooses which types to mask. `url` and `uuid` start off.
+
+The on-device model is `Xenova/distilbert-base-multilingual-cased-ner-hrl` (quantized, 129 MB). A spike in `scripts/spike-ner.ts` scored it with `bench/score.ts` and `bench/sample.ts`: F1 1.0 on the short sample, about 9 ms per sentence under Node. `bert-base-NER` was smaller but slower and English-only. `gliner_small-v2.1` int8 is 175 MB, over the 150 MB budget, so it was not bundled. Names, organizations, and locations come from the model. Emails, phones, IBANs, and the other structured types stay on the regex detector. The model does not emit street addresses.
+
+If the model errors or the Gemini composer cannot be found, the send is blocked and the toolbar badge shows `!`. The popup can switch that to regex-only. File uploads are not masked; the page shows a warning.
+
+Manual check on gemini.google.com: new chat, a follow-up that keeps the same fakes, reload keeps the map, a browser restart leaves the fakes visible, the master switch disables masking, turning one type off leaves it unchanged, and both the English and German Send buttons still work.
+
+```bash
+bun test extension/tests
+bunx playwright test --config extension/playwright.config.ts
+```
+
 ## Develop
 
 ```bash
