@@ -35,13 +35,42 @@ async function saveMap(key: string, map: SessionMap): Promise<void> {
   await chrome.storage.session.set({ [key]: map.toJSON() });
 }
 
+const nerBus = new BroadcastChannel("pii-ner");
+
+function askNer(msg: Record<string, unknown>, timeoutMs: number): Promise<{ ok?: boolean; detections?: Detection[]; error?: string }> {
+  const id = crypto.randomUUID();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      nerBus.removeEventListener("message", onMsg);
+      reject(new Error("timeout"));
+    }, timeoutMs);
+    const onMsg = (event: MessageEvent) => {
+      if (event.data?.id !== id) return;
+      clearTimeout(timer);
+      nerBus.removeEventListener("message", onMsg);
+      resolve(event.data);
+    };
+    nerBus.addEventListener("message", onMsg);
+    nerBus.postMessage({ ...msg, id });
+  });
+}
+
 async function ensureOffscreen(): Promise<void> {
   if (await chrome.offscreen.hasDocument()) return;
+  const ready = new Promise<void>((resolve) => {
+    const onMsg = (event: MessageEvent) => {
+      if (event.data?.type !== "ready") return;
+      nerBus.removeEventListener("message", onMsg);
+      resolve();
+    };
+    nerBus.addEventListener("message", onMsg);
+  });
   await chrome.offscreen.createDocument({
     url: OFFSCREEN_URL,
     reasons: [chrome.offscreen.Reason.WORKERS],
     justification: "Run the on-device personal-data model",
   });
+  await withTimeout(ready, 10_000);
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -60,19 +89,26 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-async function detectModel(text: string, settings: Settings, timeoutMs: number): Promise<Detection[] | "failed"> {
+function errText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+async function detectModel(
+  text: string,
+  settings: Settings,
+  timeoutMs: number,
+): Promise<Detection[] | { error: string }> {
   const labels = modelLabels(settings);
   if (!labels.length || !text.trim()) return [];
   try {
     await ensureOffscreen();
-    const res = await withTimeout(
-      chrome.runtime.sendMessage({ type: "ner-detect", text, labels }),
-      timeoutMs,
-    );
-    if (!res?.ok || !Array.isArray(res.detections)) return "failed";
+    const res = await askNer({ type: "ner-detect", text, labels }, timeoutMs);
+    if (!res?.ok || !Array.isArray(res.detections)) {
+      return { error: res?.error || "model returned no detections" };
+    }
     return res.detections as Detection[];
-  } catch {
-    return "failed";
+  } catch (err) {
+    return { error: errText(err) };
   }
 }
 
@@ -85,8 +121,6 @@ function setBadge(tabId: number | undefined, text: string, color: string): void 
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg?.type === "ner-detect" || msg?.type === "warmup-model") return;
-
   const tabId = sender.tab?.id;
 
   if (msg?.type === "health") {
@@ -98,7 +132,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg?.type === "warmup") {
     ensureOffscreen()
-      .then(() => chrome.runtime.sendMessage({ type: "warmup-model" }))
+      .then(() => askNer({ type: "warmup-model" }, 30_000))
       .then(
         () => sendResponse({ ok: true }),
         () => sendResponse({ ok: false }),
@@ -112,7 +146,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const labels = modelLabels(settings);
         if (!settings.enabled || !labels.length) return;
         await ensureOffscreen();
-        await chrome.runtime.sendMessage({ type: "ner-detect", text: msg.text, labels });
+        await askNer({ type: "ner-detect", text: msg.text, labels }, settings.detectorTimeoutMs);
       })
       .then(
         () => sendResponse({ ok: true }),
@@ -149,22 +183,31 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     Promise.all([loadSettings(), loadMap(key)])
       .then(async ([settings, map]) => {
         const timeoutMs = body.timeoutMs ?? settings.detectorTimeoutMs;
-        const model = await detectModel(body.text, settings, timeoutMs);
+        const detected = await detectModel(body.text, settings, timeoutMs);
+        const modelError = Array.isArray(detected) ? null : detected.error;
         const outcome = maskDraft({
           text: body.text,
           regex: Array.isArray(body.regex) ? body.regex : [],
-          model,
+          model: Array.isArray(detected) ? detected : "failed",
           settings,
           map,
         });
-        if (!outcome.ok) return outcome;
+        if (!outcome.ok) {
+          const error = modelError ?? outcome.error;
+          console.error("PII detection failed:", error);
+          return { ok: false, error };
+        }
         if (outcome.count > 0) await saveMap(key, map);
         if (tabId !== undefined) setBadge(tabId, outcome.count ? String(map.maskedCount()) : "", "#444");
         return { ...outcome, pairs: [...buildUnmaskPairs(map)] };
       })
       .then(
         (outcome) => sendResponse(outcome),
-        () => sendResponse({ ok: false, error: "detector_failed" }),
+        (err) => {
+          const error = errText(err);
+          console.error("PII detection failed:", error);
+          sendResponse({ ok: false, error });
+        },
       );
     return true;
   }

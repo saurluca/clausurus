@@ -9,21 +9,21 @@
   },
   "bytes": 135359829,
   "f1": 1,
-  "medianMs": 3.542163999999957,
+  "medianMs": 4.360380000000077,
   "reports": [
     {
       "repo": "Xenova/distilbert-base-multilingual-cased-ner-hrl",
       "file": "onnx/model_quantized.onnx",
       "bytes": 135359829,
       "f1": 1,
-      "medianMs": 3.542163999999957
+      "medianMs": 4.360380000000077
     },
     {
       "repo": "Xenova/bert-base-NER",
       "file": "onnx/model_quantized.onnx",
       "bytes": 108952255,
       "f1": 1,
-      "medianMs": 40.60968300000002
+      "medianMs": 5.1675350000000435
     },
     {
       "repo": "onnx-community/gliner_small-v2.1",

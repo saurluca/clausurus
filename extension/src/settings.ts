@@ -52,7 +52,7 @@ export type Settings = {
   enabled: boolean;
   types: Record<EntityType, boolean>;
   onDetectorError: OnDetectorError;
-  /** Inference wait on send. Model load is started earlier, on page open. */
+  /** Wait on send, including a cold load of the on-device model. */
   detectorTimeoutMs: number;
 };
 
@@ -63,7 +63,7 @@ export function defaultSettings(): Settings {
     EntityType,
     boolean
   >;
-  return { enabled: true, types, onDetectorError: "block", detectorTimeoutMs: 1500 };
+  return { enabled: true, types, onDetectorError: "block", detectorTimeoutMs: 30_000 };
 }
 
 export function normalizeSettings(raw: unknown): Settings {
@@ -74,7 +74,7 @@ export function normalizeSettings(raw: unknown): Settings {
   if (rec.onDetectorError === "block" || rec.onDetectorError === "regex") {
     base.onDetectorError = rec.onDetectorError;
   }
-  if (typeof rec.detectorTimeoutMs === "number" && rec.detectorTimeoutMs > 0) {
+  if (typeof rec.detectorTimeoutMs === "number" && rec.detectorTimeoutMs > 0 && rec.detectorTimeoutMs !== 1500) {
     base.detectorTimeoutMs = rec.detectorTimeoutMs;
   }
   if (rec.types && typeof rec.types === "object") {

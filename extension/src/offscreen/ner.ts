@@ -36,7 +36,10 @@ async function cacheKey(text: string, labels: EntityType[]): Promise<string> {
 }
 
 async function digestDelay(): Promise<void> {
-  const stored = await chrome.storage.session.get("nerDelayMs");
+  // ponytail: e2e-only delay; offscreen documents have no chrome.storage, and this must not block send
+  const session = chrome.storage?.session;
+  if (!session) return;
+  const stored = await session.get("nerDelayMs");
   const ms = stored.nerDelayMs;
   if (typeof ms === "number" && ms > 0) await new Promise((r) => setTimeout(r, ms));
 }
@@ -49,8 +52,8 @@ function loadPipeline(model: ChosenModel): Promise<TokenClassificationPipeline> 
     if (env.backends.onnx.wasm) {
       env.backends.onnx.wasm.wasmPaths = chrome.runtime.getURL("dist/ort/");
     }
-    const device = navigator.gpu ? "webgpu" : "wasm";
-    return pipeline("token-classification", model.id, { dtype: model.dtype, device });
+    // ponytail: wasm only; webgpu in an offscreen document often throws and blocks send
+    return pipeline("token-classification", model.id, { dtype: model.dtype, device: "wasm" });
   })();
   return ner;
 }
@@ -89,22 +92,35 @@ async function detect(text: string, labels: EntityType[]): Promise<Detection[]> 
   return detections;
 }
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg?.type === "warmup-model") {
+const bus = new BroadcastChannel("pii-ner");
+bus.onmessage = (event: MessageEvent) => {
+  const msg = event.data;
+  const id = msg?.id;
+  if (typeof id !== "string") return;
+  const reply = (body: { ok: boolean; detections?: Detection[]; error?: string }) => {
+    bus.postMessage({ id, ...body });
+  };
+  if (msg.type === "warmup-model") {
     loadChosen()
       .then(loadPipeline)
       .then(
-        () => sendResponse({ ok: true }),
-        (err) => sendResponse({ ok: false, error: String(err) }),
+        () => reply({ ok: true }),
+        (err) => {
+          console.error("PII model warmup failed:", err);
+          reply({ ok: false, error: String(err) });
+        },
       );
-    return true;
+    return;
   }
-  if (msg?.type !== "ner-detect") return;
+  if (msg.type !== "ner-detect") return;
   const text = typeof msg.text === "string" ? msg.text : "";
   const labels = Array.isArray(msg.labels) ? (msg.labels as EntityType[]) : [];
   detect(text, labels).then(
-    (detections) => sendResponse({ ok: true, detections }),
-    (err) => sendResponse({ ok: false, error: String(err) }),
+    (detections) => reply({ ok: true, detections }),
+    (err) => {
+      console.error("PII model detect failed:", err);
+      reply({ ok: false, error: String(err) });
+    },
   );
-  return true;
-});
+};
+bus.postMessage({ type: "ready" });

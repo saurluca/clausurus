@@ -12,7 +12,7 @@ export function showToast(doc: Document, message: string): void {
         left: 16px;
         bottom: 16px;
         z-index: 2147483647;
-        max-width: 320px;
+        max-width: 420px;
         padding: 10px 12px;
         border-radius: 8px;
         background: #1c1c1c;
@@ -30,5 +30,5 @@ export function showToast(doc: Document, message: string): void {
   const view = doc.defaultView;
   view?.setTimeout(() => {
     if (host) host.hidden = true;
-  }, 4000);
+  }, 20000);
 }

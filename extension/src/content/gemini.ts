@@ -2,32 +2,78 @@ export const COMPOSER_SELECTORS = [
   "rich-textarea .ql-editor",
   ".ql-editor[contenteditable='true']",
   "div[contenteditable='true'][role='textbox']",
+  "[aria-label='Enter a prompt for Gemini']",
 ];
+
+const SEND_LABEL = /send|senden/i;
 
 export function conversationId(pathname: string): string | null {
   const m = pathname.match(/\/app\/([^/?#]+)/);
   return m?.[1] ?? null;
 }
 
-export function findComposer(doc: Document): HTMLElement | null {
-  for (const sel of COMPOSER_SELECTORS) {
-    const el = doc.querySelector(sel);
-    if (el instanceof HTMLElement) return el;
+/** querySelector stops at a shadow root. Gemini puts the composer in one. */
+function isElement(node: EventTarget | null): node is HTMLElement {
+  return !!node && (node as Node).nodeType === 1;
+}
+
+function queryDeep(root: ParentNode, selector: string): HTMLElement | null {
+  const found = root.querySelector(selector);
+  if (isElement(found)) return found;
+  for (const el of root.querySelectorAll("*")) {
+    if (!el.shadowRoot) continue;
+    const inner = queryDeep(el.shadowRoot, selector);
+    if (inner) return inner;
   }
   return null;
 }
 
-/** Last enabled button in the composer bar. Matched by position, not localized label. */
+export function findComposer(doc: Document): HTMLElement | null {
+  for (const sel of COMPOSER_SELECTORS) {
+    const el = queryDeep(doc, sel);
+    if (el) return el;
+  }
+  return null;
+}
+
+function enabledButton(el: HTMLElement | null): HTMLElement | null {
+  if (!el || el.tagName !== "BUTTON") return null;
+  if ((el as HTMLButtonElement).disabled || el.getAttribute("aria-disabled") === "true") return null;
+  return el;
+}
+
+/** Send control, including one inside an open shadow root. Label covers EN and DE. */
+function queryAllDeep(root: ParentNode, selector: string, out: HTMLElement[] = []): HTMLElement[] {
+  for (const el of root.querySelectorAll(selector)) {
+    if (isElement(el)) out.push(el);
+  }
+  for (const el of root.querySelectorAll("*")) {
+    if (el.shadowRoot) queryAllDeep(el.shadowRoot, selector, out);
+  }
+  return out;
+}
+
 export function findSendButton(doc: Document): HTMLElement | null {
-  const marked = doc.querySelector("button.send-button");
-  if (marked instanceof HTMLElement) return marked;
-  const rich = doc.querySelector("rich-textarea");
-  const root = rich?.parentElement ?? null;
-  if (!root) return null;
-  const buttons = [...root.querySelectorAll("button")].filter(
-    (b) => b instanceof HTMLButtonElement && !b.disabled && b.getAttribute("aria-disabled") !== "true",
-  );
+  const marked = enabledButton(queryDeep(doc, "button.send-button"));
+  if (marked) return marked;
+  for (const labelled of queryAllDeep(doc, "button[aria-label]")) {
+    if (SEND_LABEL.test(labelled.getAttribute("aria-label") ?? "")) {
+      const hit = enabledButton(labelled);
+      if (hit) return hit;
+    }
+  }
+  const rich = queryDeep(doc, "rich-textarea");
+  const root = rich?.parentElement ?? rich?.getRootNode();
+  const scope = root instanceof Document || root instanceof ShadowRoot ? root : rich?.parentElement;
+  if (!scope) return null;
+  const buttons = [...scope.querySelectorAll("button")].filter((b) => enabledButton(isElement(b) ? b : null));
   return buttons.at(-1) ?? null;
+}
+
+export function eventHits(event: Event, el: HTMLElement | null): boolean {
+  if (!el) return false;
+  if (typeof event.composedPath === "function" && event.composedPath().includes(el)) return true;
+  return el.contains(event.target as Node);
 }
 
 export function checkHealth(doc: Document): "ok" | "broken" {
@@ -82,12 +128,13 @@ export function installSendHook(doc: Document, deps: SendHookDeps): () => void {
     let result: MaskResult;
     try {
       result = await deps.onSend(text);
-    } catch {
-      result = { ok: false, error: "detector_failed" };
+    } catch (err) {
+      result = { ok: false, error: err instanceof Error ? err.message : "detector_failed" };
     }
     if (!result.ok) {
       busy = false;
-      deps.showError("PII detection failed. The message was not sent.");
+      console.error("PII detection failed:", result.error);
+      deps.showError(`PII detection failed (${result.error}). The message was not sent.`);
       return;
     }
     if (result.masked !== text) writeComposer(editor, result.masked);
@@ -108,14 +155,14 @@ export function installSendHook(doc: Document, deps: SendHookDeps): () => void {
     if (!(event instanceof KeyboardEvent)) return;
     if (event.key !== "Enter" || event.shiftKey || event.isComposing || event.repeat) return;
     const editor = deps.getEditor();
-    if (!editor || !editor.contains(event.target as Node)) return;
+    if (!editor || !eventHits(event, editor)) return;
     void run("key", event, editor);
   };
 
   const onClick = (event: Event): void => {
     if (pass || !deps.isEnabled()) return;
     const button = deps.getSendButton();
-    if (!button || !button.contains(event.target as Node)) return;
+    if (!button || !eventHits(event, button)) return;
     const editor = deps.getEditor();
     if (!editor) {
       event.preventDefault();

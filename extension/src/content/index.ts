@@ -21,6 +21,44 @@ function onWatchedPage(): boolean {
 
 if (onWatchedPage()) boot();
 
+/** False after the extension is reloaded while this page is still open. */
+function runtimeAlive(): boolean {
+  try {
+    return Boolean(chrome.runtime?.id);
+  } catch {
+    return false;
+  }
+}
+
+function send(message: object, done?: (res: { ok?: boolean; error?: string; pairs?: unknown; masked?: string } | undefined) => void): void {
+  const fail = (error: string): void => done?.({ ok: false, error });
+  if (!runtimeAlive()) {
+    fail("extension context invalidated; reload the Gemini tab");
+    return;
+  }
+  try {
+    chrome.runtime.sendMessage(message, (res) => {
+      if (!runtimeAlive()) {
+        fail("extension context invalidated; reload the Gemini tab");
+        return;
+      }
+      try {
+        const runtimeError = chrome.runtime.lastError?.message;
+        if (runtimeError) {
+          fail(runtimeError);
+          return;
+        }
+      } catch (err) {
+        fail(err instanceof Error ? err.message : "extension context invalidated");
+        return;
+      }
+      done?.(res);
+    });
+  } catch (err) {
+    fail(err instanceof Error ? err.message : "extension context invalidated");
+  }
+}
+
 function boot(): void {
   let settings: Settings = defaultSettings();
   let pairs: Array<[string, string]> = [];
@@ -29,10 +67,15 @@ function boot(): void {
   const restorer = installRestorer(document, () => pairs);
 
   const refreshSettings = (): void => {
-    chrome.storage.sync.get(SETTINGS_KEY, (stored) => {
-      settings = normalizeSettings(stored[SETTINGS_KEY]);
-      document.documentElement.dataset.piiReady = "1";
-    });
+    if (!runtimeAlive()) return;
+    try {
+      chrome.storage.sync.get(SETTINGS_KEY, (stored) => {
+        settings = normalizeSettings(stored[SETTINGS_KEY]);
+        document.documentElement.dataset.piiReady = "1";
+      });
+    } catch {
+      // extension was reloaded
+    }
   };
   refreshSettings();
   chrome.storage.onChanged.addListener((changes, area) => {
@@ -40,16 +83,16 @@ function boot(): void {
   });
 
   const pullPairs = (): void => {
-    chrome.runtime.sendMessage({ type: "getPairs", conversationId: convId }, (res) => {
+    send({ type: "getPairs", conversationId: convId }, (res) => {
       if (res?.ok && Array.isArray(res.pairs)) {
-        pairs = res.pairs;
+        pairs = res.pairs as Array<[string, string]>;
         restorer.refresh();
       }
     });
   };
   pullPairs();
 
-  chrome.runtime.sendMessage({ type: "warmup" });
+  send({ type: "warmup" });
 
   let prewarmTimer = 0;
   const editor = () => findComposer(document);
@@ -61,7 +104,7 @@ function boot(): void {
       window.clearTimeout(prewarmTimer);
       prewarmTimer = window.setTimeout(() => {
         const text = el.innerText ?? "";
-        if (text.trim()) chrome.runtime.sendMessage({ type: "prewarm", text });
+        if (text.trim()) send({ type: "prewarm", text });
       }, 400);
     },
     true,
@@ -74,7 +117,7 @@ function boot(): void {
     showError: (message) => showToast(document, message),
     onSend: (text) =>
       new Promise((resolve) => {
-        chrome.runtime.sendMessage(
+        send(
           {
             type: "mask",
             text,
@@ -83,16 +126,12 @@ function boot(): void {
             timeoutMs: settings.detectorTimeoutMs,
           },
           (res) => {
-            if (chrome.runtime.lastError || !res) {
-              resolve({ ok: false, error: "detector_failed" });
-              return;
-            }
-            if (!res.ok) {
-              resolve({ ok: false, error: res.error ?? "detector_failed" });
+            if (!res?.ok || typeof res.masked !== "string") {
+              resolve({ ok: false, error: res?.error || "no response from the extension" });
               return;
             }
             if (Array.isArray(res.pairs)) {
-              pairs = res.pairs;
+              pairs = res.pairs as Array<[string, string]>;
               restorer.refresh();
             }
             resolve({ ok: true, masked: res.masked });
@@ -113,18 +152,23 @@ function boot(): void {
   );
 
   const reportHealth = (): void => {
-    chrome.runtime.sendMessage({ type: "health", ok: checkHealth(document) === "ok" });
+    send({ type: "health", ok: checkHealth(document) === "ok" });
   };
   reportHealth();
-  window.setInterval(reportHealth, 2000);
+  const healthTimer = window.setInterval(reportHealth, 2000);
 
-  window.setInterval(() => {
+  const convTimer = window.setInterval(() => {
+    if (!runtimeAlive()) {
+      window.clearInterval(healthTimer);
+      window.clearInterval(convTimer);
+      return;
+    }
     const next = conversationId(location.pathname);
     if (next === convId) return;
     const prev = convId;
     convId = next;
     if (prev === null && next) {
-      chrome.runtime.sendMessage({ type: "renameConversation", to: next }, () => pullPairs());
+      send({ type: "renameConversation", to: next }, () => pullPairs());
     } else {
       pullPairs();
     }
