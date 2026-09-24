@@ -1,0 +1,19 @@
+{
+  "name": "apertus-privacy-gateway",
+  "version": "0.1.0",
+  "description": "Local privacy proxy. Mask personal data before it reaches any model API, then restore it in the reply.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "apertus-privacy-gateway": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "dev": "bun src/cli.ts",
+    "test": "bun test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
