@@ -1,0 +1,35 @@
+{
+  "id": "Xenova/distilbert-base-multilingual-cased-ner-hrl",
+  "dtype": "q8",
+  "labels": {
+    "PER": "person_name",
+    "ORG": "organization",
+    "LOC": "location",
+    "MISC": null
+  },
+  "bytes": 135359829,
+  "f1": 1,
+  "medianMs": 3.542163999999957,
+  "reports": [
+    {
+      "repo": "Xenova/distilbert-base-multilingual-cased-ner-hrl",
+      "file": "onnx/model_quantized.onnx",
+      "bytes": 135359829,
+      "f1": 1,
+      "medianMs": 3.542163999999957
+    },
+    {
+      "repo": "Xenova/bert-base-NER",
+      "file": "onnx/model_quantized.onnx",
+      "bytes": 108952255,
+      "f1": 1,
+      "medianMs": 40.60968300000002
+    },
+    {
+      "repo": "onnx-community/gliner_small-v2.1",
+      "file": "onnx/model_int8.onnx",
+      "bytes": 183403734,
+      "skipped": "over 150 MB"
+    }
+  ]
+}

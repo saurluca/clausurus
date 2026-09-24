@@ -3,3 +3,9 @@ dist/
 .env
 *.log
 bench/cache/
+extension/dist/
+extension/models/**/*.onnx
+extension/models/**/tokenizer.json
+extension/models/**/*.wasm
+test-results/
+playwright-report/

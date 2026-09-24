@@ -1,0 +1,36 @@
+<!doctype html>
+<html data-pii-fixture="1">
+<head><meta charset="utf-8"><title>Gemini fixture</title></head>
+<body>
+  <rich-textarea>
+    <div class="ql-editor" contenteditable="true" role="textbox"></div>
+  </rich-textarea>
+  <button class="send-button" type="button">Send</button>
+  <input id="file" type="file">
+  <div id="sent"></div>
+  <user-query></user-query>
+  <model-response></model-response>
+  <a href="/app/conv-1">New chat</a>
+  <script>
+    const editor = document.querySelector(".ql-editor");
+    const button = document.querySelector(".send-button");
+    const sent = document.getElementById("sent");
+    function submit() {
+      const text = editor.innerText || editor.textContent || "";
+      sent.textContent = text;
+      document.querySelector("user-query").textContent = text;
+      const reply = document.querySelector("model-response");
+      const full = "Noted " + text;
+      let i = 0;
+      const timer = setInterval(() => {
+        reply.textContent = full.slice(0, i++);
+        if (i > full.length) clearInterval(timer);
+      }, 15);
+    }
+    button.addEventListener("click", submit);
+    editor.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) submit();
+    });
+  </script>
+</body>
+</html>
