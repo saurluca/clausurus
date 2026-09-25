@@ -1,7 +1,8 @@
 /**
  * Example: OpenAI SDK through the privacy gateway.
  *
- *   bun src/cli.ts --detection regex --upstream https://api.openai.com/v1
+ *   cp .env.example .env   # set UPSTREAM_BASE_URL
+ *   bun src/cli.ts
  *   OPENAI_API_KEY=sk-... bun examples/openai-sdk.ts
  *
  * Requires the `openai` package if you want to run this file as-is.

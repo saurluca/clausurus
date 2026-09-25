@@ -18,13 +18,13 @@ async function main(): Promise<void> {
   }
 
   if (!config.upstream && !config.inspect) {
-    console.error("Pass --upstream <url> or set UPSTREAM_BASE_URL (or use --inspect).");
+    console.error("Set UPSTREAM_BASE_URL in .env (or INSPECT=true).");
     process.exit(1);
   }
 
   if (config.detection === "llm+regex" && !config.detectorApiKey && !config.inspect) {
     console.warn(
-      "Warning: DETECTOR_API_KEY is unset. Detector calls may fail; use --detection regex or set the key.",
+      "Warning: DETECTOR_API_KEY is unset in .env. Detector calls may fail; set the key or DETECTION=regex.",
     );
   }
 

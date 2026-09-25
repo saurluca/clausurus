@@ -1,7 +1,8 @@
 /**
  * Example: Anthropic Messages API through the privacy gateway.
  *
- *   bun src/cli.ts --detection regex --upstream https://api.anthropic.com
+ *   Set UPSTREAM_BASE_URL=https://api.anthropic.com in .env
+ *   bun src/cli.ts
  *   ANTHROPIC_API_KEY=... bun examples/anthropic-sdk.ts
  */
 const baseURL = process.env.ANTHROPIC_BASE_URL ?? "http://localhost:8787";

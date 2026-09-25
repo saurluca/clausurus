@@ -84,22 +84,17 @@ export function parseConfig(argv: string[], cwd = process.cwd()): Config {
     host: flag(argv, "--host") ?? env.HOST ?? "127.0.0.1",
     sessionTtlSeconds: Number(env.SESSION_TTL_SECONDS ?? 3600),
     allowRaw: has(argv, "--allow-raw") || env.ALLOW_RAW_BODIES === "true",
-    inspect: has(argv, "--inspect"),
+    inspect: has(argv, "--inspect") || env.INSPECT === "true",
   };
 }
 
 export function helpText(): string {
   return `apertus-privacy-gateway
 
-  DETECTOR_API_KEY=... apertus-privacy-gateway --upstream https://api.openai.com/v1
+  Copy .env.example to .env, set UPSTREAM_BASE_URL and DETECTOR_API_KEY, then run:
+    apertus-privacy-gateway
 
-  --upstream <url>              default model API
-  --port <n>                    listen port (8787)
-  --host <addr>                 listen address (127.0.0.1)
-  --detection llm+regex|regex   detector layers
-  --allow-upstream-override     honor X-Upstream-Base-URL when allowlisted
-  --allow-raw                   forward non-JSON bodies unmasked
-  --inspect                     print what the upstream receives
+  Values come from .env (see .env.example). Shell environment overrides the file.
 
   POST /_gateway/preview        mask a JSON body and return replacements; does not forward
 `;

@@ -1,8 +1,8 @@
 /**
  * Smoke test against a real detector (Apertus or Ollama) plus a local mock upstream.
  *
- *   DETECTOR_API_KEY=... bun scripts/smoke.ts
- *   DETECTOR_BASE_URL=http://localhost:11434/v1 DETECTOR_MODEL=qwen3:1.7b bun scripts/smoke.ts
+ *   Set DETECTOR_API_KEY in .env, then: bun scripts/smoke.ts
+ *   For Ollama, set DETECTOR_BASE_URL and DETECTOR_MODEL in .env.
  */
 import { createServer } from "node:http";
 import { createGateway } from "../src/server.js";
@@ -11,7 +11,7 @@ import { parseConfig } from "../src/config.js";
 async function main(): Promise<void> {
   const config = parseConfig(["--detection", "llm+regex", ...process.argv.slice(2)]);
   if (!config.detectorApiKey && !config.detectorBaseUrl.includes("11434")) {
-    console.error("Set DETECTOR_API_KEY (or point DETECTOR_BASE_URL at local Ollama).");
+    console.error("Set DETECTOR_API_KEY in .env (or point DETECTOR_BASE_URL at local Ollama).");
     process.exit(1);
   }
 

@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Demo: start the gateway in another terminal, then run this script.
-#   DETECTOR_API_KEY=... bun src/cli.ts --upstream https://api.openai.com/v1
-#   # or regex-only:
-#   bun src/cli.ts --detection regex --upstream https://api.openai.com/v1
+#   cp .env.example .env   # set UPSTREAM_BASE_URL and DETECTOR_API_KEY
+#   bun src/cli.ts
 set -euo pipefail
 BASE="${GATEWAY_URL:-http://127.0.0.1:8787}"
 KEY="${OPENAI_API_KEY:-sk-test}"
