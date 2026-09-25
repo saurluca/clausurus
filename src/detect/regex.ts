@@ -56,6 +56,9 @@ const ID_GATES: Array<{ type: EntityType; ctx: RegExp }> = [
 const TRACKING_RE =
   /\b(?:1Z[A-Za-z0-9]{16}|9[2-5]\d{18,20}|JJD\d{10,20}|JD\d{12,22})\b/gi;
 
+const NAME_CUE_RE =
+  /(?<=\b(?:called|named|name is|heisst|heißt|namens|genannt)\s+)[A-Za-z][A-Za-z'’-]+/gi;
+
 function pushMatch(
   out: Detection[],
   type: EntityType,
@@ -183,6 +186,15 @@ export function detectRegex(text: string): Detection[] {
       const window = text.slice(windowStart, m.index + m[0].length + 10);
       if (!DOB_CONTEXT.test(window)) continue;
       pushMatch(out, "date_of_birth", text, m);
+    }
+  }
+
+  NAME_CUE_RE.lastIndex = 0;
+  {
+    let m: RegExpExecArray | null;
+    while ((m = NAME_CUE_RE.exec(text))) {
+      if (overlaps(out, m.index, m.index + m[0].length)) continue;
+      pushMatch(out, "person_name", text, m);
     }
   }
 

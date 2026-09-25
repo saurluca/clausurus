@@ -19,6 +19,22 @@ header {
 .master {
   font-weight: 600;
 }
+#log-btn {
+  margin-top: 8px;
+  font: inherit;
+}
+#log {
+  margin: 8px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #1c1c1c;
+  color: #f4f4f4;
+  padding: 8px;
+  border-radius: 8px;
+  font: 11px/1.35 ui-monospace, monospace;
+}
 .hint {
   margin: 8px 0 12px;
   color: #555;

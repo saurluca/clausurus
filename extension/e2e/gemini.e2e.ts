@@ -26,6 +26,15 @@ async function launch(): Promise<BrowserContext> {
 test.beforeAll(async () => {
   const html = await readFile(join(import.meta.dirname, "fixture.html"));
   const server = createServer((req, res) => {
+    if (req.method === "POST" && req.url === "/send") {
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk) => chunks.push(chunk as Buffer));
+      req.on("end", () => {
+        res.setHeader("content-type", "text/plain");
+        res.end(Buffer.concat(chunks));
+      });
+      return;
+    }
     res.setHeader("content-type", "text/html");
     res.end(html);
   });

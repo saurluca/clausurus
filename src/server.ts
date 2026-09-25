@@ -11,7 +11,8 @@ import type { Config } from "./config.js";
 import { DetectorError } from "./detect/llm.js";
 import { runDetection } from "./detect/pipeline.js";
 import { collectMaskableStrings } from "./mask/walk.js";
-import { maskJson } from "./mask/mask.js";
+import { maskJson, uniqueReplacements, type AppliedReplacement } from "./mask/mask.js";
+import type { SessionMap } from "./mask/map.js";
 import { unmaskJson, unmaskText } from "./mask/unmask.js";
 import { createSseUnmaskTransform } from "./mask/stream.js";
 import { SessionStore } from "./session/store.js";
@@ -120,6 +121,11 @@ export function createGateway(config: Config, opts?: { log?: LogFn; fetchFn?: ty
         return;
       }
 
+      if (method === "POST" && url.split("?")[0] === "/_gateway/preview") {
+        await previewRespond(req, res, config, store, fetchFn, log, requestId, started);
+        return;
+      }
+
       const upstreamBase = resolveUpstream(config, req);
       if (typeof upstreamBase === "object") {
         res.writeHead(400, { "content-type": "application/json" });
@@ -163,17 +169,11 @@ export function createGateway(config: Config, opts?: { log?: LogFn; fetchFn?: ty
             return;
           }
 
-          const strings = collectMaskableStrings(parsed);
-          let byText;
+          let masked: unknown;
           try {
-            const result = await runDetection({
-              config,
-              texts: strings,
-              fetchFn,
-            });
-            byText = result.byText;
+            masked = (await detectAndMask(config, parsed, map, fetchFn)).masked;
           } catch (err) {
-            if (config.onDetectorError === "block" || err instanceof DetectorError) {
+            if (err instanceof DetectionFailed) {
               log({
                 requestId,
                 method,
@@ -188,7 +188,6 @@ export function createGateway(config: Config, opts?: { log?: LogFn; fetchFn?: ty
             throw err;
           }
 
-          const masked = maskJson(parsed, byText, map);
           maskedCount = map.maskedCount();
           maskedTypes = map.maskedTypes();
           outboundBody = JSON.stringify(masked);
@@ -314,6 +313,98 @@ export function createGateway(config: Config, opts?: { log?: LogFn; fetchFn?: ty
         server.close((e) => (e ? reject(e) : resolve()));
       }),
   };
+}
+
+class DetectionFailed extends Error {}
+
+async function detectAndMask(
+  config: Config,
+  parsed: unknown,
+  map: SessionMap,
+  fetchFn: typeof fetch,
+): Promise<{ masked: unknown; replacements: AppliedReplacement[] }> {
+  const strings = collectMaskableStrings(parsed);
+  let byText;
+  try {
+    const result = await runDetection({ config, texts: strings, fetchFn });
+    byText = result.byText;
+  } catch (err) {
+    if (config.onDetectorError === "block" || err instanceof DetectorError) {
+      throw new DetectionFailed();
+    }
+    throw err;
+  }
+  const applied: AppliedReplacement[] = [];
+  const masked = maskJson(parsed, byText, map, applied);
+  return { masked, replacements: uniqueReplacements(applied) };
+}
+
+async function previewRespond(
+  req: IncomingMessage,
+  res: ServerResponse,
+  config: Config,
+  store: SessionStore,
+  fetchFn: typeof fetch,
+  log: LogFn,
+  requestId: string,
+  started: number,
+): Promise<void> {
+  const bodyBuf = await readBody(req);
+  const ct = contentType(req);
+  if (!isJsonContentType(ct)) {
+    res.writeHead(415, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        error: { type: "unsupported_media_type", message: "only application/json bodies are masked" },
+      }),
+    );
+    return;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(bodyBuf.toString("utf8"));
+  } catch {
+    res.writeHead(400, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: { type: "invalid_json", message: "malformed JSON body" } }));
+    return;
+  }
+
+  const map = header(req, "x-pii-session")
+    ? store.getOrCreate(header(req, "x-pii-session"))
+    : store.fresh();
+
+  let masked: unknown;
+  let replacements: AppliedReplacement[];
+  try {
+    const result = await detectAndMask(config, parsed, map, fetchFn);
+    masked = result.masked;
+    replacements = result.replacements;
+  } catch (err) {
+    if (err instanceof DetectionFailed) {
+      log({
+        requestId,
+        method: "POST",
+        path: "/_gateway/preview",
+        error: "pii_detection_failed",
+        latencyMs: Date.now() - started,
+      });
+      res.writeHead(502, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: { type: "pii_detection_failed" } }));
+      return;
+    }
+    throw err;
+  }
+
+  log({
+    requestId,
+    method: "POST",
+    path: "/_gateway/preview",
+    entityCount: replacements.length,
+    entityTypes: [...new Set(replacements.map((r) => r.type))],
+    latencyMs: Date.now() - started,
+  });
+  res.writeHead(200, { "content-type": "application/json" });
+  res.end(JSON.stringify({ masked, replacements }));
 }
 
 async function inspectRespond(

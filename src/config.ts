@@ -100,5 +100,7 @@ export function helpText(): string {
   --allow-upstream-override     honor X-Upstream-Base-URL when allowlisted
   --allow-raw                   forward non-JSON bodies unmasked
   --inspect                     print what the upstream receives
+
+  POST /_gateway/preview        mask a JSON body and return replacements; does not forward
 `;
 }

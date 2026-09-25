@@ -1,14 +1,12 @@
 import { detectRegex } from "../../../src/detect/regex.js";
-import {
-  checkHealth,
-  conversationId,
-  findComposer,
-  findSendButton,
-  installSendHook,
-} from "./gemini.js";
+import { conversationId, findComposer, findSendButton, readComposer } from "./gemini.js";
 import { installRestorer } from "./restore.js";
+import { bodyHasDraft, spliceDraft } from "./rewrite.js";
 import { defaultSettings, normalizeSettings, SETTINGS_KEY, type Settings } from "../settings.js";
+import { pushLog } from "../log.js";
 import { showToast } from "./toast.js";
+
+const CHANNEL = "apertus-pii";
 
 const FIXTURE_HOST = "127.0.0.1";
 const FIXTURE_PORT = "8765";
@@ -31,7 +29,10 @@ function runtimeAlive(): boolean {
 }
 
 function send(message: object, done?: (res: { ok?: boolean; error?: string; pairs?: unknown; masked?: string } | undefined) => void): void {
-  const fail = (error: string): void => done?.({ ok: false, error });
+  const fail = (error: string): void => {
+    pushLog(error);
+    done?.({ ok: false, error });
+  };
   if (!runtimeAlive()) {
     fail("extension context invalidated; reload the Gemini tab");
     return;
@@ -60,9 +61,11 @@ function send(message: object, done?: (res: { ok?: boolean; error?: string; pair
 }
 
 function boot(): void {
+  console.log("apertus: content script booted", location.href);
   let settings: Settings = defaultSettings();
   let pairs: Array<[string, string]> = [];
   let convId = conversationId(location.pathname);
+  let lastDraft = "";
 
   const restorer = installRestorer(document, () => pairs);
 
@@ -94,50 +97,65 @@ function boot(): void {
 
   send({ type: "warmup" });
 
+  const remember = (): void => {
+    const el = findComposer(document);
+    const text = el ? readComposer(el) : "";
+    if (text.trim()) lastDraft = text;
+  };
+  window.addEventListener("input", remember, true);
+  window.addEventListener("keydown", remember, true);
+  window.addEventListener("click", remember, true);
+
   let prewarmTimer = 0;
-  const editor = () => findComposer(document);
-  document.addEventListener(
+  window.addEventListener(
     "input",
     () => {
-      const el = editor();
-      if (!el || !settings.enabled) return;
+      const text = lastDraft;
+      if (!text.trim() || !settings.enabled) return;
       window.clearTimeout(prewarmTimer);
-      prewarmTimer = window.setTimeout(() => {
-        const text = el.innerText ?? "";
-        if (text.trim()) send({ type: "prewarm", text });
-      }, 400);
+      prewarmTimer = window.setTimeout(() => send({ type: "prewarm", text }), 400);
     },
     true,
   );
 
-  installSendHook(document, {
-    isEnabled: () => settings.enabled,
-    getEditor: () => findComposer(document),
-    getSendButton: () => findSendButton(document),
-    showError: (message) => showToast(document, message),
-    onSend: (text) =>
-      new Promise((resolve) => {
-        send(
-          {
-            type: "mask",
-            text,
-            conversationId: convId,
-            regex: detectRegex(text),
-            timeoutMs: settings.detectorTimeoutMs,
-          },
-          (res) => {
-            if (!res?.ok || typeof res.masked !== "string") {
-              resolve({ ok: false, error: res?.error || "no response from the extension" });
-              return;
-            }
-            if (Array.isArray(res.pairs)) {
-              pairs = res.pairs as Array<[string, string]>;
-              restorer.refresh();
-            }
-            resolve({ ok: true, masked: res.masked });
-          },
-        );
-      }),
+  window.addEventListener("message", (event) => {
+    if (event.source !== window) return;
+    const data = event.data as { channel?: string; type?: string; id?: string; body?: string };
+    if (!data || data.channel !== CHANNEL || data.type !== "mask-request" || !data.id) return;
+    const reply = (payload: { ok: boolean; body?: string; error?: string }): void => {
+      window.postMessage({ channel: CHANNEL, type: "mask-result", id: data.id, ...payload }, "*");
+    };
+    const body = typeof data.body === "string" ? data.body : "";
+    const draft = lastDraft;
+    if (!settings.enabled || !bodyHasDraft(body, draft)) {
+      reply({ ok: true, body });
+      return;
+    }
+    send(
+      {
+        type: "mask",
+        text: draft,
+        conversationId: convId,
+        regex: detectRegex(draft),
+        timeoutMs: settings.detectorTimeoutMs,
+      },
+      (res) => {
+        if (!res?.ok || typeof res.masked !== "string") {
+          const error = res?.error || "no response from the extension";
+          pushLog(error);
+          showToast(document, `PII detection failed (${error}). The message was not sent.`);
+          reply({ ok: false, error });
+          return;
+        }
+        if (Array.isArray(res.pairs)) {
+          pairs = res.pairs as Array<[string, string]>;
+          restorer.refresh();
+        }
+        if (res.masked === draft) pushLog("sent as typed: no personal data detected");
+        else pushLog("masked before send");
+        reply({ ok: true, body: spliceDraft(body, draft, res.masked) });
+      },
+    );
   });
 
   document.addEventListener(
@@ -152,7 +170,13 @@ function boot(): void {
   );
 
   const reportHealth = (): void => {
-    send({ type: "health", ok: checkHealth(document) === "ok" });
+    const composer = Boolean(findComposer(document));
+    const button = Boolean(findSendButton(document));
+    if (!composer || !button) {
+      const missing = [composer ? "" : "composer", button ? "" : "send button"].filter(Boolean).join(" and ");
+      pushLog(`not found: ${missing}`);
+    }
+    send({ type: "health", ok: composer && button });
   };
   reportHealth();
   const healthTimer = window.setInterval(reportHealth, 2000);

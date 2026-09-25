@@ -40,7 +40,7 @@ function png(size: number): Buffer {
   ]);
 }
 
-const entries = ["content/index.ts", "background/sw.ts", "offscreen/ner.ts", "popup/popup.ts"];
+const entries = ["content/index.ts", "content/page-hook.ts", "background/sw.ts", "offscreen/ner.ts", "popup/popup.ts"];
 const result = await Bun.build({
   entrypoints: entries.map((e) => join(root, "src", e)),
   outdir: out,

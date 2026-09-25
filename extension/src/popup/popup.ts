@@ -1,4 +1,5 @@
 import type { EntityType } from "../../../src/detect/types.js";
+import { readLogs } from "../log.js";
 import { normalizeSettings, SETTINGS_KEY, TYPE_GROUPS, type Settings } from "../settings.js";
 
 const enabled = document.querySelector<HTMLInputElement>("#enabled")!;
@@ -65,6 +66,26 @@ enabled.addEventListener("change", () => {
 fallback.addEventListener("change", () => {
   settings.onDetectorError = fallback.checked ? "regex" : "block";
   save();
+});
+
+const logBtn = document.querySelector<HTMLButtonElement>("#log-btn")!;
+const logBox = document.querySelector<HTMLPreElement>("#log")!;
+
+async function renderLogs(): Promise<void> {
+  const lines = await readLogs();
+  logBox.textContent = lines.length
+    ? lines.map((line) => `${new Date(line.t).toLocaleTimeString()}  ${line.message}`).join("\n")
+    : "No errors yet.";
+  logBox.scrollTop = logBox.scrollHeight;
+}
+
+logBtn.addEventListener("click", () => {
+  logBox.hidden = !logBox.hidden;
+  if (!logBox.hidden) void renderLogs();
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "session" && changes["pii-logs"] && !logBox.hidden) void renderLogs();
 });
 
 chrome.storage.sync.get(SETTINGS_KEY, (stored) => {

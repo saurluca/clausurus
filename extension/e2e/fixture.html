@@ -15,12 +15,19 @@
     const editor = document.querySelector(".ql-editor");
     const button = document.querySelector(".send-button");
     const sent = document.getElementById("sent");
-    function submit() {
+    async function submit() {
       const text = editor.innerText || editor.textContent || "";
-      sent.textContent = text;
-      document.querySelector("user-query").textContent = text;
+      let masked = "";
+      try {
+        const res = await fetch("/send", { method: "POST", headers: { "content-type": "text/plain" }, body: text });
+        masked = await res.text();
+      } catch {
+        return;
+      }
+      sent.textContent = masked;
+      document.querySelector("user-query").textContent = masked;
       const reply = document.querySelector("model-response");
-      const full = "Noted " + text;
+      const full = "Noted " + masked;
       let i = 0;
       const timer = setInterval(() => {
         reply.textContent = full.slice(0, i++);

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
-import { findComposer, findSendButton, installSendHook, writeComposer } from "../src/content/gemini.js";
+import { findComposer, findSendButton, writeComposer } from "../src/content/gemini.js";
+import { bodyHasDraft, spliceDraft } from "../src/content/rewrite.js";
 
 function page(): { doc: Document; editor: HTMLElement; button: HTMLButtonElement; window: Window } {
   const window = new Window();
@@ -34,52 +35,17 @@ describe("findComposer", () => {
   });
 });
 
-describe("installSendHook", () => {
-  test("masks once and re-dispatches the click", async () => {
-    const { doc, editor, button } = page();
-    let calls = 0;
-    let pageSends = 0;
-    button.addEventListener("click", () => {
-      pageSends++;
-    });
-    installSendHook(doc, {
-      isEnabled: () => true,
-      getEditor: () => editor,
-      getSendButton: () => button,
-      showError: () => {},
-      onSend: async () => {
-        calls++;
-        return { ok: true, masked: "fake@example.com" };
-      },
-    });
-    button.dispatchEvent(new doc.defaultView!.MouseEvent("click", { bubbles: true, cancelable: true }));
-    await new Promise((r) => setTimeout(r, 20));
-    expect(calls).toBe(1);
-    expect(pageSends).toBe(1);
-    expect(editor.textContent).toBe("fake@example.com");
+describe("spliceDraft", () => {
+  test("replaces the raw prompt and a JSON-escaped prompt", () => {
+    expect(spliceDraft("mail ada@example.com", "ada@example.com", "fake@example.com")).toBe("mail fake@example.com");
+    const body = JSON.stringify(["say hi\nthere"]);
+    expect(bodyHasDraft(body, "hi\nthere")).toBe(true);
+    expect(spliceDraft(body, "hi\nthere", "hello")).toBe(JSON.stringify(["say hello"]));
   });
 
-  test("does not re-dispatch when detection fails", async () => {
-    const { doc, editor, button } = page();
-    let pageSends = 0;
-    button.addEventListener("click", () => {
-      pageSends++;
-    });
-    let shown = "";
-    installSendHook(doc, {
-      isEnabled: () => true,
-      getEditor: () => editor,
-      getSendButton: () => button,
-      showError: (message) => {
-        shown = message;
-      },
-      onSend: async () => ({ ok: false, error: "timeout" }),
-    });
-    button.dispatchEvent(new doc.defaultView!.MouseEvent("click", { bubbles: true, cancelable: true }));
-    await new Promise((r) => setTimeout(r, 20));
-    expect(pageSends).toBe(0);
-    expect(editor.textContent).toBe("ada@example.com");
-    expect(shown).toContain("timeout");
+  test("leaves a body that does not contain the draft", () => {
+    expect(bodyHasDraft("other", "ada@example.com")).toBe(false);
+    expect(spliceDraft("other", "ada@example.com", "fake@example.com")).toBe("other");
   });
 
   test("writeComposer uses execCommand when it succeeds", () => {

@@ -3,8 +3,14 @@
   "name": "Apertus privacy",
   "version": "0.1.0",
   "description": "Replace personal data with fakes on Gemini, then show the real values in the chat.",
-  "permissions": ["storage", "offscreen"],
-  "host_permissions": ["https://gemini.google.com/*", "http://127.0.0.1:8765/*"],
+  "permissions": [
+    "storage",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "https://gemini.google.com/*",
+    "http://127.0.0.1:8765/*"
+  ],
   "background": {
     "service_worker": "dist/background/sw.js",
     "type": "module"
@@ -25,9 +31,26 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://gemini.google.com/*", "http://127.0.0.1:8765/*"],
-      "js": ["dist/content/index.js"],
-      "run_at": "document_idle",
+      "matches": [
+        "https://gemini.google.com/*",
+        "http://127.0.0.1:8765/*"
+      ],
+      "js": [
+        "dist/content/page-hook.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "type": "module"
+    },
+    {
+      "matches": [
+        "https://gemini.google.com/*",
+        "http://127.0.0.1:8765/*"
+      ],
+      "js": [
+        "dist/content/index.js"
+      ],
+      "run_at": "document_start",
       "type": "module"
     }
   ],

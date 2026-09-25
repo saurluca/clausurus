@@ -201,6 +201,50 @@ describe("integration mock upstream", () => {
     expect(lastUpstream.body).not.toBe("{bad");
   });
 
+  test("preview then chat reuses the same fakes", async () => {
+    const real = "alice@example.com";
+    const session = "sess-preview-1";
+    const before = lastUpstream.body;
+    const preview = await fetch(`http://127.0.0.1:${gwPort}/_gateway/preview`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-pii-session": session,
+      },
+      body: JSON.stringify({ text: `Email ${real} please` }),
+    });
+    expect(preview.status).toBe(200);
+    expect(lastUpstream.body).toBe(before);
+    const body = (await preview.json()) as {
+      masked: { text: string };
+      replacements: Array<{ type: string; real: string; fake: string; source: string }>;
+    };
+    const hit = body.replacements.find((r) => r.real === real);
+    expect(hit?.type).toBe("email");
+    expect(hit?.source).toBe("regex");
+    expect(hit?.fake).toBeTruthy();
+    expect(body.masked.text).toContain(hit!.fake);
+    expect(body.masked.text).not.toContain(real);
+
+    const res = await fetch(`http://127.0.0.1:${gwPort}/v1/chat/completions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer sk-preview",
+        "x-pii-session": session,
+      },
+      body: JSON.stringify({
+        model: "gpt-test",
+        messages: [{ role: "user", content: `Email ${real} please` }],
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(lastUpstream.body).toContain(hit!.fake);
+    expect(lastUpstream.body).not.toContain(real);
+    const json = (await res.json()) as { choices: Array<{ message: { content: string } }> };
+    expect(json.choices[0]!.message.content).toContain(real);
+  });
+
   test("health endpoint", async () => {
     const res = await fetch(`http://127.0.0.1:${gwPort}/_gateway/health`);
     expect(res.status).toBe(200);

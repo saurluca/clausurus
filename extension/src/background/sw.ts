@@ -1,6 +1,7 @@
 import type { Detection } from "../../../src/detect/types.js";
 import { buildUnmaskPairs } from "../../../src/mask/unmask.js";
 import { SessionMap, type SessionMapJson } from "../../../src/mask/map.js";
+import { pushLog } from "../log.js";
 import { maskDraft } from "../policy.js";
 import { modelLabels, normalizeSettings, SETTINGS_KEY, type Settings } from "../settings.js";
 
@@ -121,6 +122,7 @@ function setBadge(tabId: number | undefined, text: string, color: string): void 
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  console.log("apertus", msg?.type);
   const tabId = sender.tab?.id;
 
   if (msg?.type === "health") {
@@ -134,8 +136,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     ensureOffscreen()
       .then(() => askNer({ type: "warmup-model" }, 30_000))
       .then(
-        () => sendResponse({ ok: true }),
-        () => sendResponse({ ok: false }),
+        (res) => {
+          if (!res?.ok) pushLog(res?.error || "model warmup failed");
+          sendResponse({ ok: true });
+        },
+        (err) => {
+          pushLog(errText(err));
+          sendResponse({ ok: false });
+        },
       );
     return true;
   }
@@ -146,11 +154,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const labels = modelLabels(settings);
         if (!settings.enabled || !labels.length) return;
         await ensureOffscreen();
-        await askNer({ type: "ner-detect", text: msg.text, labels }, settings.detectorTimeoutMs);
+        const res = await askNer({ type: "ner-detect", text: msg.text, labels }, settings.detectorTimeoutMs);
+        if (!res?.ok) pushLog(res?.error || "model prewarm failed");
       })
       .then(
         () => sendResponse({ ok: true }),
-        () => sendResponse({ ok: false }),
+        (err) => {
+          pushLog(errText(err));
+          sendResponse({ ok: false });
+        },
       );
     return true;
   }
@@ -195,6 +207,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (!outcome.ok) {
           const error = modelError ?? outcome.error;
           console.error("PII detection failed:", error);
+          pushLog(`PII detection failed: ${error}`);
           return { ok: false, error };
         }
         if (outcome.count > 0) await saveMap(key, map);
@@ -206,6 +219,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         (err) => {
           const error = errText(err);
           console.error("PII detection failed:", error);
+          pushLog(`PII detection failed: ${error}`);
           sendResponse({ ok: false, error });
         },
       );

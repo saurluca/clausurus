@@ -1,11 +1,19 @@
-import type { Detection } from "../detect/types.js";
+import type { Detection, DetectionSource, EntityType } from "../detect/types.js";
 import type { SessionMap } from "./map.js";
 import { collectMaskableStrings, walkStrings } from "./walk.js";
+
+export type AppliedReplacement = {
+  type: EntityType;
+  real: string;
+  fake: string;
+  source: DetectionSource;
+};
 
 export function applyDetectionsToText(
   text: string,
   detections: Detection[],
   map: SessionMap,
+  applied?: AppliedReplacement[],
 ): string {
   if (!detections.length) return text;
   const sorted = [...detections].sort((a, b) => b.start - a.start);
@@ -15,6 +23,9 @@ export function applyDetectionsToText(
     const slice = out.slice(d.start, d.end);
     if (slice !== d.value) continue;
     const fake = map.mask(d.type, d.value);
+    if (applied && fake !== slice) {
+      applied.push({ type: d.type, real: slice, fake, source: d.source });
+    }
     out = out.slice(0, d.start) + fake + out.slice(d.end);
   }
   return out;
@@ -37,6 +48,7 @@ export function maskJson(
   value: unknown,
   detectionsByText: Detection[][],
   map: SessionMap,
+  applied?: AppliedReplacement[],
 ): unknown {
   const clone = structuredClone(value);
   const strings = collectMaskableStrings(clone);
@@ -46,8 +58,21 @@ export function maskJson(
   walkStrings(clone, (visit) => {
     const dets = detectionsByText[i] ?? [];
     i++;
-    visit.set(applyDetectionsToText(visit.value, dets, map));
+    visit.set(applyDetectionsToText(visit.value, dets, map, applied));
   });
   map.clearRequestValues();
   return clone;
+}
+
+/** Spans applied to this body. Repeats of the same type and real value collapse. */
+export function uniqueReplacements(list: AppliedReplacement[]): AppliedReplacement[] {
+  const seen = new Set<string>();
+  const out: AppliedReplacement[] = [];
+  for (const r of list) {
+    const key = `${r.type}\0${r.real}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out;
 }

@@ -1,5 +1,6 @@
 import { env, pipeline, type TokenClassificationPipeline } from "@huggingface/transformers";
 import type { Detection, EntityType } from "../../../src/detect/types.js";
+import { pushLog } from "../log.js";
 
 type ChosenModel = {
   id: string;
@@ -107,6 +108,7 @@ bus.onmessage = (event: MessageEvent) => {
         () => reply({ ok: true }),
         (err) => {
           console.error("PII model warmup failed:", err);
+          pushLog(`PII model warmup failed: ${err}`);
           reply({ ok: false, error: String(err) });
         },
       );
@@ -119,6 +121,7 @@ bus.onmessage = (event: MessageEvent) => {
     (detections) => reply({ ok: true, detections }),
     (err) => {
       console.error("PII model detect failed:", err);
+      pushLog(`PII model detect failed: ${err}`);
       reply({ ok: false, error: String(err) });
     },
   );

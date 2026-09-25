@@ -70,12 +70,6 @@ export function findSendButton(doc: Document): HTMLElement | null {
   return buttons.at(-1) ?? null;
 }
 
-export function eventHits(event: Event, el: HTMLElement | null): boolean {
-  if (!el) return false;
-  if (typeof event.composedPath === "function" && event.composedPath().includes(el)) return true;
-  return el.contains(event.target as Node);
-}
-
 export function checkHealth(doc: Document): "ok" | "broken" {
   return findComposer(doc) && findSendButton(doc) ? "ok" : "broken";
 }
@@ -100,83 +94,3 @@ export function writeComposer(editor: HTMLElement, text: string): void {
   editor.textContent = text;
 }
 
-export type MaskResult = { ok: true; masked: string } | { ok: false; error: string };
-
-export type SendHookDeps = {
-  isEnabled(): boolean;
-  getEditor(): HTMLElement | null;
-  getSendButton(): HTMLElement | null;
-  onSend(text: string): Promise<MaskResult>;
-  showError(message: string): void;
-};
-
-/**
- * Capture Enter and Send, mask, then re-dispatch once.
- * The pass flag stops the re-dispatch from being masked again.
- */
-export function installSendHook(doc: Document, deps: SendHookDeps): () => void {
-  let pass = false;
-  let busy = false;
-
-  const run = async (kind: "key" | "click", event: Event, editor: HTMLElement): Promise<void> => {
-    const text = readComposer(editor);
-    if (!text.trim()) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    if (busy) return;
-    busy = true;
-    let result: MaskResult;
-    try {
-      result = await deps.onSend(text);
-    } catch (err) {
-      result = { ok: false, error: err instanceof Error ? err.message : "detector_failed" };
-    }
-    if (!result.ok) {
-      busy = false;
-      console.error("PII detection failed:", result.error);
-      deps.showError(`PII detection failed (${result.error}). The message was not sent.`);
-      return;
-    }
-    if (result.masked !== text) writeComposer(editor, result.masked);
-    pass = true;
-    busy = false;
-    const view = doc.defaultView;
-    if (!view) return;
-    if (kind === "key") {
-      editor.dispatchEvent(new view.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
-    } else {
-      deps.getSendButton()?.dispatchEvent(new view.MouseEvent("click", { bubbles: true, cancelable: true }));
-    }
-    pass = false;
-  };
-
-  const onKey = (event: Event): void => {
-    if (pass || !deps.isEnabled()) return;
-    if (!(event instanceof KeyboardEvent)) return;
-    if (event.key !== "Enter" || event.shiftKey || event.isComposing || event.repeat) return;
-    const editor = deps.getEditor();
-    if (!editor || !eventHits(event, editor)) return;
-    void run("key", event, editor);
-  };
-
-  const onClick = (event: Event): void => {
-    if (pass || !deps.isEnabled()) return;
-    const button = deps.getSendButton();
-    if (!button || !eventHits(event, button)) return;
-    const editor = deps.getEditor();
-    if (!editor) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      deps.showError("PII protection lost the composer. The message was not sent.");
-      return;
-    }
-    void run("click", event, editor);
-  };
-
-  doc.addEventListener("keydown", onKey, true);
-  doc.addEventListener("click", onClick, true);
-  return () => {
-    doc.removeEventListener("keydown", onKey, true);
-    doc.removeEventListener("click", onClick, true);
-  };
-}

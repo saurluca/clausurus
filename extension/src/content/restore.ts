@@ -72,8 +72,13 @@ export function installRestorer(
     else run();
   };
   const observer = new MutationObserver(schedule);
-  if (doc.body) observer.observe(doc.body, { subtree: true, childList: true, characterData: true });
-  schedule();
+  const arm = (): void => {
+    if (!doc.body) return;
+    observer.observe(doc.body, { subtree: true, childList: true, characterData: true });
+    schedule();
+  };
+  if (doc.body) arm();
+  else doc.addEventListener("DOMContentLoaded", arm, { once: true });
   return {
     refresh: schedule,
     stop: () => observer.disconnect(),

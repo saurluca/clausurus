@@ -75,6 +75,12 @@ describe("detectRegex", () => {
     expect(detectRegex(`code ${token}`).some((x) => x.type === "passport" || x.type === "national_id" || x.type === "driver_license" || x.type === "id_card")).toBe(false);
   });
 
+  test("a name after called or named is a person", () => {
+    const d = detectRegex("my Grandma is called erika 72 years old");
+    expect(d.some((x) => x.type === "person_name" && x.value === "erika")).toBe(true);
+    expect(detectRegex("the weather is cool").some((x) => x.type === "person_name")).toBe(false);
+  });
+
   test("tracking numbers use carrier shapes", () => {
     const ups = detectRegex("ship 1Z999AA10123456784 today");
     expect(ups.some((x) => x.type === "tracking_number" && x.value === "1Z999AA10123456784")).toBe(true);
