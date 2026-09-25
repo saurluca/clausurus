@@ -12,8 +12,6 @@ You get back:   a reply addressed to Martina Brunner-Keller
 
 *(Illustrative example, fictional data.)*
 
-
-
 The only model that ever sees your real text is the **detector**, which finds the personal data. By default that's **Apertus**, Switzerland's fully open public model. You can also run a model on your own computer instead. Either way, the provider you're protecting your data from never does the detecting.
 
 ## Example
@@ -24,19 +22,19 @@ Here I asked the AI to write a conscie email based on my personal information fo
 
 ## Features
 
-- Use what ever model you want, how you want, while keeping your datasafe.
-- Personal information is only shows to sources you trust.
+- Use whichever model you want, how you want, while keeping your data safe.
+- Personal information is only revealed to sources you trust.
 - You keep your own API key; only the base URL changes.
 - Works with OpenAI- and Anthropic-style APIs, including streamed replies.
 - Personal details are swapped for realistic stand-ins, then restored in the reply.
 
 ## Future plan
 
-The same mask-and-restore path for anyone who wants a foreign model on data that should stay here:
+The same mask-and-restore path for anyone who wants an overseas-hosted model on data that should stay within national borders:
 
-- Browser extension to make agentic privacy available for even more people.
-- Support of full agentic workflows with masked personal information.
-- Privacy safe document and audio transcription
+- Browser extension to make agentic privacy available to a broader market.
+- Support of full agentic workflows with masked personal identifying information.
+- System to cover multimodal input, incl. documents and audio transcription.
 
 ## In one paragraph, for developers
 
@@ -55,6 +53,8 @@ In your app, change only the base URL (key unchanged):
 ```bash
 OPENAI_BASE_URL=http://localhost:8787/v1
 ```
+
+
 
 ## Detector presets
 
@@ -84,8 +84,6 @@ Auth is transparent: `Authorization`, `x-api-key`, `api-key`, and `anthropic-ver
 - Listen address defaults to `127.0.0.1`. `HOST=0.0.0.0` in `.env` is opt-in and prints a warning.
 - Audit headers: `X-Pii-Masked` (count) and `X-Pii-Types` (types only)—never values.
 - Non-JSON bodies: `415` unless `--allow-raw`. Malformed JSON: `400`, never forwarded raw.
-
-
 
 ## Develop
 
