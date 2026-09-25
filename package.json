@@ -11,21 +11,14 @@
     "build": "tsc",
     "start": "node dist/cli.js",
     "dev": "bun src/cli.ts",
-    "test": "bun test tests extension/tests",
-    "bench": "bun scripts/bench-pii.ts",
-    "build:ext": "bun extension/build.ts",
-    "test:ext": "bun test extension/tests && playwright test --config extension/playwright.config.ts"
+    "test": "bun test",
+    "bench": "bun scripts/bench-pii.ts"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
-    "@huggingface/transformers": "^4.3.0",
-    "@playwright/test": "^1.63.0",
-    "@types/chrome": "^0.3.0",
     "@types/node": "^26.6.2",
-    "happy-dom": "^20.14.5",
-    "onnxruntime-web": "^1.30.0",
     "typescript": "^7.0.2"
   }
 }
