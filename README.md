@@ -57,11 +57,6 @@ Auth is transparent: `Authorization`, `x-api-key`, `api-key`, and `anthropic-ver
 - Audit headers: `X-Pii-Masked` (count) and `X-Pii-Types` (types only)—never values.
 - Non-JSON bodies: `415` unless `--allow-raw`. Malformed JSON: `400`, never forwarded raw.
 
-## Limitations
-
-- Detection is **not guaranteed**. The upstream reasons about fakes; invented personal data in the reply is not reversed.
-- Images, audio, and raw/non-JSON bodies are not masked (v1).
-- No persistent map backend; no multi-tenant hosting.
 
 ## Gemini extension
 
