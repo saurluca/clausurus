@@ -12,7 +12,15 @@ You get back:   a reply addressed to Martina Brunner-Keller
 
 *(Illustrative example, fictional data.)*
 
+
+
 The only model that ever sees your real text is the **detector**, which finds the personal data. By default that's **Apertus**, Switzerland's fully open public model. You can also run a model on your own computer instead. Either way, the provider you're protecting your data from never does the detecting.
+
+## Example
+
+Here I asked the AI to write a conscie email based on my personal information for a Migros complaint. In red you can see the flagged personal info, and on the right you an see how it was replaced for the AI. In the final response you can see the real information you provided again, as it was placed back in.
+
+![Clausurus chat: personal details are masked before they reach the model, then restored in the reply](clausurus.png)
 
 ## Features
 
