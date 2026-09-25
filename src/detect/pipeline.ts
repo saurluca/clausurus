@@ -41,8 +41,6 @@ export function cacheKey(model: string, text: string): string {
   return createHash("sha256").update(model).update("\0").update(text).digest("hex");
 }
 
-export { mergeDetections };
-
 export type PipelineResult = {
   detections: Detection[];
   /** Per-text detection lists matching input order. */
@@ -116,5 +114,3 @@ export async function runDetection(opts: RunDetectOpts): Promise<PipelineResult>
 export function clearDetectionCache(): void {
   cache.clear();
 }
-
-export { DetectorError };

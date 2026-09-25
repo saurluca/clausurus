@@ -8,11 +8,8 @@ import {
   stripToJsonObject,
   DetectorError,
 } from "../src/detect/llm.js";
-import {
-  clearDetectionCache,
-  mergeDetections,
-  runDetection,
-} from "../src/detect/pipeline.js";
+import { mergeDetections } from "../src/detect/merge.js";
+import { clearDetectionCache, runDetection } from "../src/detect/pipeline.js";
 import type { Config } from "../src/config.js";
 
 function baseConfig(over: Partial<Config> = {}): Config {
